@@ -63,7 +63,7 @@ def ask_gemini(messages, model_name, apikey, system_prompt):
     except Exception as e:
         return f"[답변 에러 발생] 제미나이가 답변을 생성하지 못했습니다. (상세: {e})"
 
-# 텍스트 -> 음성 (TTS) - 💡 모바일 브라우저에서도 재생되도록 controls 추가
+# 텍스트 -> 음성 (TTS)
 def TTS(response):
     if "[에러 발생]" in response or "[STT 에러 발생]" in response:
         return
@@ -76,7 +76,6 @@ def TTS(response):
         with open(filename, "rb") as f:
             data = f.read()
             b64 = base64.b64encode(data).decode()
-            # autoplay와 controls를 모두 넣어 모바일 차단을 우회하고 직접 누를 수 있게 함
             md = f"""
                 <audio controls autoplay>
                 <source src="data:audio/mp3;base64,{b64}" type="audio/mp3">
@@ -102,8 +101,49 @@ def main():
     if "last_audio_len" not in st.session_state:
         st.session_state["last_audio_len"] = 0
 
-    st.header("💘 당신만을 위한 AI 연애 상담소")
-    st.markdown("---")
+    # 💡 [지하철 노선도 스타일 커스텀 배너 적용]
+    banner_html = """
+    <div style="
+        background: linear-gradient(90deg, #b0bec5 0%, #d7ccc8 50%, #b0bec5 100%);
+        padding: 20px;
+        border-radius: 16px;
+        text-align: center;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.05);
+        margin-bottom: 25px;
+        position: relative;
+        overflow: hidden;
+    ">
+        <div style="font-size: 0.85rem; color: #666; letter-spacing: 2px; margin-bottom: 5px; font-weight: bold;">AI 오리지널</div>
+        <div style="
+            display: inline-flex;
+            align-items: center;
+            background: #ffffff;
+            padding: 10px 30px;
+            border-radius: 50px;
+            border: 3px solid #d9534f;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+        ">
+            <span style="
+                background: #d9534f;
+                color: white;
+                width: 35px;
+                height: 35px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                border-radius: 50%;
+                font-weight: bold;
+                font-size: 1.2rem;
+                margin-right: 15px;
+            ">♥</span>
+            <div style="text-align: left;">
+                <div style="font-size: 1.8rem; font-weight: 900; color: #222; line-height: 1.1; font-family: sans-serif;">연애상담소</div>
+                <div style="font-size: 0.75rem; color: #d9534f; font-weight: bold; letter-spacing: 1px;">LOVE COUNSEL</div>
+            </div>
+        </div>
+    </div>
+    """
+    st.markdown(banner_html, unsafe_allow_html=True)
 
     personas = {
         "🧊 냉정한 팩폭러": "너는 매우 냉정하고 객관적인 연애 상담사야. 사용자의 감정에 휘둘리지 말고, 상황을 냉철하게 분석해서 뼈를 때리는 팩트 폭력과 함께 현실적인 조언을 해줘. 말투는 차갑고 단호하게 해.",
@@ -185,7 +225,7 @@ def main():
                     st.session_state["messages"].append({"role": "user", "content": user_question})
 
     with col2:
-        st.subheader("상담사 답변")
+        st.subheader("상담소 답변")
         
         if user_question:
             if "[STT 에러 발생]" in user_question:
@@ -201,7 +241,6 @@ def main():
                 now = datetime.now().strftime("%H:%M")
                 st.session_state["chat"].append(("bot", now, response))
 
-        # 채팅 출력 UI
         for sender, time, message in st.session_state["chat"]:
             if sender == "user":
                 st.write(f'<div style="display:flex;align-items:center;"><div style="background-color:#FFD1DC;color:black;border-radius:12px;padding:8px 12px;margin-right:8px;">{message}</div><div style="font-size:0.8rem;color:gray;">{time}</div></div>', unsafe_allow_html=True)
@@ -209,7 +248,6 @@ def main():
                 st.write(f'<div style="display:flex;align-items:center;justify-content:flex-end;"><div style="background-color:#F0F0F0;color:black;border-radius:12px;padding:8px 12px;margin-left:8px;">{message}</div><div style="font-size:0.8rem;color:gray;">{time}</div></div>', unsafe_allow_html=True)
             st.write("")
         
-        # 음성으로 질문했을 때만 오디오 플레이어 노출
         if user_question and input_type == "audio":
             TTS(response)
 
