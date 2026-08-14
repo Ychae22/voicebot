@@ -8,7 +8,7 @@ import base64
 
 ##### 1. 기능 구현 함수 #####
 
-# 음성 -> 텍스트 (STT) - 업로드 방식 대신 다이렉트 데이터 전달 방식
+# 음성 -> 텍스트 (STT)
 def STT(audio, apikey, model_name):
     filename = 'input.mp3'
     audio.export(filename, format="mp3")
@@ -39,7 +39,7 @@ def STT(audio, apikey, model_name):
             
     return result_text
 
-# 텍스트 답변 생성 (LLM) - 시스템 프롬프트(페르소나) 적용
+# 텍스트 답변 생성 (LLM)
 def ask_gemini(messages, model_name, apikey, system_prompt):
     genai.configure(api_key=apikey)
     
@@ -63,7 +63,7 @@ def ask_gemini(messages, model_name, apikey, system_prompt):
     except Exception as e:
         return f"[답변 에러 발생] 제미나이가 답변을 생성하지 못했습니다. (상세: {e})"
 
-# 텍스트 -> 음성 (TTS)
+# 텍스트 -> 음성 (TTS) - 💡 모바일 브라우저에서도 재생되도록 controls 추가
 def TTS(response):
     if "[에러 발생]" in response or "[STT 에러 발생]" in response:
         return
@@ -76,8 +76,9 @@ def TTS(response):
         with open(filename, "rb") as f:
             data = f.read()
             b64 = base64.b64encode(data).decode()
+            # autoplay와 controls를 모두 넣어 모바일 차단을 우회하고 직접 누를 수 있게 함
             md = f"""
-                <audio autoplay="True">
+                <audio controls autoplay>
                 <source src="data:audio/mp3;base64,{b64}" type="audio/mp3">
                 </audio>
                 """
@@ -92,7 +93,6 @@ def TTS(response):
 def main():
     st.set_page_config(page_title="맞춤형 연애 상담소", layout="wide")
 
-    # 상태 초기화
     if "chat" not in st.session_state:
         st.session_state["chat"] = []
     if "messages" not in st.session_state:
@@ -105,7 +105,6 @@ def main():
     st.header("💘 당신만을 위한 AI 연애 상담소")
     st.markdown("---")
 
-    # 상담사 페르소나 리스트
     personas = {
         "🧊 냉정한 팩폭러": "너는 매우 냉정하고 객관적인 연애 상담사야. 사용자의 감정에 휘둘리지 말고, 상황을 냉철하게 분석해서 뼈를 때리는 팩트 폭력과 함께 현실적인 조언을 해줘. 말투는 차갑고 단호하게 해.",
         "🥰 무조건 내 편": "너는 무조건 사용자의 편을 들어주는 따뜻한 연애 상담사야. 사용자가 무슨 말을 하든 전적으로 공감해주고, 위로해주며, 필요하다면 상대방을 같이 욕해줘. 다정하고 따뜻한 말투를 사용해.",
@@ -149,7 +148,7 @@ def main():
     col1, col2 = st.columns(2)
     
     user_question = "" 
-    input_type = "" # 💡 입력 방식(text 또는 audio)을 판별하기 위한 변수
+    input_type = ""
 
     with col1:
         st.subheader(f"[{selected_persona_title}]에게 사연 말하기")
@@ -169,7 +168,7 @@ def main():
             else:
                 if submit_btn and text_input:
                     user_question = text_input
-                    input_type = "text"  # 💡 텍스트 입력 기록
+                    input_type = "text"
                     
                 elif len(audio) > 0 and len(audio) != st.session_state["last_audio_len"]:
                     st.session_state["last_audio_len"] = len(audio)
@@ -177,7 +176,7 @@ def main():
                     
                     with st.spinner("사연을 듣는 중..."):
                         user_question = STT(audio, gemini_api_key, model)
-                    input_type = "audio"  # 💡 음성 입력 기록
+                    input_type = "audio"
 
             if user_question:
                 now = datetime.now().strftime("%H:%M")
@@ -210,7 +209,7 @@ def main():
                 st.write(f'<div style="display:flex;align-items:center;justify-content:flex-end;"><div style="background-color:#F0F0F0;color:black;border-radius:12px;padding:8px 12px;margin-left:8px;">{message}</div><div style="font-size:0.8rem;color:gray;">{time}</div></div>', unsafe_allow_html=True)
             st.write("")
         
-        # 💡 오직 음성(audio)으로 질문했을 때만 TTS(음성 출력) 실행!
+        # 음성으로 질문했을 때만 오디오 플레이어 노출
         if user_question and input_type == "audio":
             TTS(response)
 
