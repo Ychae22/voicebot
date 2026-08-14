@@ -101,11 +101,34 @@ def main():
     if "last_audio_len" not in st.session_state:
         st.session_state["last_audio_len"] = 0
 
-    # 💡 깃허브에 올린 banner.png 이미지를 상단에 띄우기
+    # 💡 [CSS로 이미지 크기를 줄여서 배너처럼 가로로 띄우기]
     if os.path.exists("banner.png"):
-        st.image("banner.png", use_container_width=True)
+        st.markdown(
+            """
+            <style>
+            .banner-container {
+                display: flex;
+                justify-content: center;
+                margin-bottom: 20px;
+            }
+            .banner-container img {
+                width: 100%;
+                max-height: 180px; /* 높이를 제한하여 배너 모양으로 만듦 */
+                object-fit: cover; /* 이미지가 찌그러지지 않고 비율을 유지하며 채워짐 */
+                border-radius: 12px;
+                box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+            }
+            </style>
+            """,
+            unsafe_allow_html=True
+        )
+        
+        # 이미지를 읽어서 Base64로 변환 후 HTML로 출력
+        with open("banner.png", "rb") as img_file:
+            img_bytes = img_file.read()
+            img_b64 = base64.b64encode(img_bytes).decode()
+            st.markdown(f'<div class="banner-container"><img src="data:image/png;base64,{img_b64}"></div>', unsafe_allow_html=True)
     else:
-        # 이미지가 아직 없거나 로드 전일 때 대체 텍스트 표시
         st.header("환장연애 EXChange - 연애 상담소")
 
     st.markdown("---")
