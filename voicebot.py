@@ -16,7 +16,8 @@ def STT(audio, apikey):
     genai.configure(api_key=apikey)
     audio_file = genai.upload_file(path=filename)
     
-    model = genai.GenerativeModel('gemini-1.5-flash')
+    # 💡 STT 모델을 3.1 flash lite로 지정
+    model = genai.GenerativeModel('gemini-3.1-flash-lite')
     response = model.generate_content([
         "이 오디오에서 들리는 말을 한국어 텍스트로만 정확하게 받아적어줘. 다른 말은 절대 덧붙이지 마.", 
         audio_file
@@ -84,13 +85,12 @@ def main():
         gemini_api_key = st.text_input(label="Gemini API 키", placeholder="Enter Your Gemini API Key", type="password")
         st.markdown("---")
         
+        # 💡 UI 옵션을 3.1 Flash Lite 하나로 깔끔하게 통일
         model_options = {
-            "1.5 Flash-8B (가장 빠른 답변)": "gemini-1.5-flash-8b",
-            "1.5 Flash (무엇이든 도움)": "gemini-1.5-flash",
-            "1.5 Pro (고급 수학 및 코딩)": "gemini-1.5-pro"
+            "3.1 Flash Lite": "gemini-3.1-flash-lite"
         }
         
-        selected_model_ui = st.radio(label="Gemini 모델 선택", options=list(model_options.keys()), index=2)
+        selected_model_ui = st.radio(label="Gemini 모델 선택", options=list(model_options.keys()), index=0)
         model = model_options[selected_model_ui]
         
         st.markdown("---")
