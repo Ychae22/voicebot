@@ -5,7 +5,6 @@ import os
 from datetime import datetime
 from gtts import gTTS
 import base64
-import json
 
 ##### 1. 기능 구현 함수 #####
 
@@ -249,14 +248,14 @@ def main():
                 if "[에러 발생]" not in user_question and "[STT 에러 발생]" not in user_question:
                     st.session_state["messages"][selected_persona_title].append({"role": "user", "content": user_question})
                     
-                    # 💡 [1단계 핵심] 질문이 들어오면 백그라운드에서 키워드 자동 추출
+                    # 💡 [1단계 핵심] 질문이 들어오면 키워드 자동 추출 후 저장
                     extracted = extract_keyword(user_question, gemini_api_key, model)
                     st.session_state["keywords"][selected_persona_title] = extracted
 
     with col2:
         st.subheader("상담사 답변")
         
-        # 💡 [1단계 UI] 현재 감지된 고민 키워드를 상단에 예쁘게 뱃지로 표시
+        # 💡 [1단계 UI] 화면 상단에 감지된 키워드 뱃지 표시
         current_keyword = st.session_state["keywords"][selected_persona_title]
         st.markdown(f"""
             <div style="background-color: #fff0f3; border: 1px solid #ffb3c1; padding: 10px 15px; border-radius: 10px; margin-bottom: 15px; display: flex; align-items: center;">
