@@ -90,7 +90,7 @@ def TTS(response):
 
 ##### 2. 메인 웹 화면 구현 #####
 def main():
-    st.set_page_config(page_title="맞춤형 연애 상담소", layout="wide")
+    st.set_page_config(page_title="환장연애 - AI 연애 상담소", layout="wide")
 
     if "chat" not in st.session_state:
         st.session_state["chat"] = []
@@ -101,49 +101,14 @@ def main():
     if "last_audio_len" not in st.session_state:
         st.session_state["last_audio_len"] = 0
 
-    # 💡 [지하철 노선도 스타일 커스텀 배너 적용]
-    banner_html = """
-    <div style="
-        background: linear-gradient(90deg, #b0bec5 0%, #d7ccc8 50%, #b0bec5 100%);
-        padding: 20px;
-        border-radius: 16px;
-        text-align: center;
-        box-shadow: 0 4px 15px rgba(0,0,0,0.05);
-        margin-bottom: 25px;
-        position: relative;
-        overflow: hidden;
-    ">
-        <div style="font-size: 0.85rem; color: #666; letter-spacing: 2px; margin-bottom: 5px; font-weight: bold;">AI 오리지널</div>
-        <div style="
-            display: inline-flex;
-            align-items: center;
-            background: #ffffff;
-            padding: 10px 30px;
-            border-radius: 50px;
-            border: 3px solid #d9534f;
-            box-shadow: 0 4px 10px rgba(0,0,0,0.1);
-        ">
-            <span style="
-                background: #d9534f;
-                color: white;
-                width: 35px;
-                height: 35px;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                border-radius: 50%;
-                font-weight: bold;
-                font-size: 1.2rem;
-                margin-right: 15px;
-            ">♥</span>
-            <div style="text-align: left;">
-                <div style="font-size: 1.8rem; font-weight: 900; color: #222; line-height: 1.1; font-family: sans-serif;">연애상담소</div>
-                <div style="font-size: 0.75rem; color: #d9534f; font-weight: bold; letter-spacing: 1px;">LOVE COUNSEL</div>
-            </div>
-        </div>
-    </div>
-    """
-    st.markdown(banner_html, unsafe_allow_html=True)
+    # 💡 깃허브에 올린 banner.png 이미지를 상단에 띄우기
+    if os.path.exists("banner.png"):
+        st.image("banner.png", use_container_width=True)
+    else:
+        # 이미지가 아직 없거나 로드 전일 때 대체 텍스트 표시
+        st.header("환장연애 EXChange - 연애 상담소")
+
+    st.markdown("---")
 
     personas = {
         "🧊 냉정한 팩폭러": "너는 매우 냉정하고 객관적인 연애 상담사야. 사용자의 감정에 휘둘리지 말고, 상황을 냉철하게 분석해서 뼈를 때리는 팩트 폭력과 함께 현실적인 조언을 해줘. 말투는 차갑고 단호하게 해.",
@@ -225,7 +190,7 @@ def main():
                     st.session_state["messages"].append({"role": "user", "content": user_question})
 
     with col2:
-        st.subheader("상담소 답변")
+        st.subheader("상담사 답변")
         
         if user_question:
             if "[STT 에러 발생]" in user_question:
