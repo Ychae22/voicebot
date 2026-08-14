@@ -35,12 +35,11 @@ def STT(audio, apikey, model_name):
             
     return result_text
 
-# 텍스트 답변 생성 (LLM) - 💡 시스템 프롬프트(페르소나) 적용
+# 텍스트 답변 생성 (LLM) - 시스템 프롬프트(페르소나) 적용
 def ask_gemini(messages, model_name, apikey, system_prompt):
     genai.configure(api_key=apikey)
     
     try:
-        # 💡 GenerativeModel을 호출할 때 system_instruction을 주입하여 성격을 부여합니다.
         model = genai.GenerativeModel(
             model_name=model_name,
             system_instruction=system_prompt
@@ -102,25 +101,33 @@ def main():
     st.header("💘 당신만을 위한 AI 연애 상담소")
     st.markdown("---")
 
-    # 💡 상담사 페르소나(성격) 정의
+    # 💡 상담사 페르소나 리스트 업데이트
     personas = {
         "🧊 냉정한 팩폭러": "너는 매우 냉정하고 객관적인 연애 상담사야. 사용자의 감정에 휘둘리지 말고, 상황을 냉철하게 분석해서 뼈를 때리는 팩트 폭력과 함께 현실적인 조언을 해줘. 말투는 차갑고 단호하게 해.",
         "🥰 무조건 내 편": "너는 무조건 사용자의 편을 들어주는 따뜻한 연애 상담사야. 사용자가 무슨 말을 하든 전적으로 공감해주고, 위로해주며, 필요하다면 상대방을 같이 욕해줘. 다정하고 따뜻한 말투를 사용해.",
-        "🛠️ 극T 해결사": "너는 감정적인 공감보다는 실용적인 해결책을 제시하는 연애 상담사야. 상황을 분석하고, 사용자가 지금 당장 해야 할 구체적인 행동 지침을 1, 2, 3 단계로 명확하고 간결하게 알려줘."
+        "👨‍👩‍👧 부모님의 마음": "너는 사용자를 진심으로 아끼고 사랑하는 엄마 혹은 아빠야. 자식이 연애 문제로 마음고생하는 걸 안타까워하면서도, 언제나 든든한 내 편이 되어주고 인생 선배로서 따뜻한 조언을 해줘. '우리 딸(혹은 아들) 속상했구나, 밥은 먹었어?' 같이 애정 넘치고 포근한 부모님의 말투를 사용해.",
+        "✍️ 직접 성향 입력하기": "" # 사용자가 직접 입력할 수 있도록 비워둠
     }
 
     with st.sidebar:
         gemini_api_key = st.text_input(label="Gemini API 키", placeholder="API 키를 입력하세요", type="password")
         st.markdown("---")
         
-        # UI에서 상담사 버전 선택
         st.subheader("👤 상담사 선택")
         selected_persona_title = st.radio("어떤 상담을 원하시나요?", list(personas.keys()), index=0)
-        selected_system_prompt = personas[selected_persona_title] # 선택된 성격의 프롬프트 저장
+        
+        # 💡 '직접 입력하기'를 선택했을 때 텍스트 입력창 띄우기
+        if selected_persona_title == "✍️ 직접 성향 입력하기":
+            custom_prompt = st.text_area(
+                "상담사의 성격, 말투, 상황을 자세히 적어주세요.", 
+                placeholder="예: 10년 지기 츤데레 찐친처럼 툴툴거리면서도 은근히 챙겨주는 말투로 팩폭 섞인 조언을 해줘."
+            )
+            selected_system_prompt = custom_prompt
+        else:
+            selected_system_prompt = personas[selected_persona_title]
         
         st.markdown("---")
         
-        # 💡 오직 3.1 Flash Lite만 남김!
         model_options = {
             "3.1 Flash Lite": "gemini-3.1-flash-lite"
         }
@@ -184,6 +191,7 @@ def main():
                 st.session_state["chat"].append(("bot", datetime.now().strftime("%H:%M"), response))
             else:
                 with st.spinner(f"{selected_persona_title}가 답변을 고민 중입니다..."):
+                    # 💡 사용자 지정 프롬프트가 적용된 채로 답변이 생성됨!
                     response = ask_gemini(st.session_state["messages"], model, gemini_api_key, selected_system_prompt)
                 
                 if "[답변 에러 발생]" not in response:
