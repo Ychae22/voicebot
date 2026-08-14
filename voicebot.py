@@ -8,7 +8,7 @@ import base64
 
 ##### 1. 기능 구현 함수 #####
 
-# 음성을 텍스트로 변환 (STT) - 제미나이 활용
+# 음성 -> 텍스트 (STT)
 def STT(audio, apikey, model_name):
     filename = 'input.mp3'
     audio.export(filename, format="mp3")
@@ -17,7 +17,6 @@ def STT(audio, apikey, model_name):
     audio_file = genai.upload_file(path=filename)
     
     try:
-        # 지정된 모델 사용 (만약 3.1 flash lite가 없는 모델이면 여기서 에러를 잡습니다)
         model = genai.GenerativeModel(model_name)
         response = model.generate_content([
             "이 오디오에서 들리는 말을 한국어 텍스트로만 정확하게 받아적어줘. 다른 말은 절대 덧붙이지 마.", 
@@ -25,10 +24,8 @@ def STT(audio, apikey, model_name):
         ])
         result_text = response.text.strip()
     except Exception as e:
-        # API 에러 발생 시 프로그램이 멈추지 않고 에러 메시지 반환
-        result_text = f"[STT 에러 발생] 음성 인식 중 문제가 발생했습니다. 모델명({model_name})이 올바른지 확인해주세요. (상세: {e})"
+        result_text = f"[STT 에러 발생] 음성 인식 중 문제가 발생했습니다. (상세: {e})"
     finally:
-        # 성공하든 실패하든 생성된 임시 파일은 확실히 삭제
         if os.path.exists(filename):
             os.remove(filename)
         try:
@@ -38,12 +35,16 @@ def STT(audio, apikey, model_name):
             
     return result_text
 
-# 텍스트 답변 생성 (LLM) - 제미나이 채팅 활용
-def ask_gemini(messages, model_name, apikey):
+# 텍스트 답변 생성 (LLM) - 💡 시스템 프롬프트(페르소나) 적용
+def ask_gemini(messages, model_name, apikey, system_prompt):
     genai.configure(api_key=apikey)
     
     try:
-        model = genai.GenerativeModel(model_name)
+        # 💡 GenerativeModel을 호출할 때 system_instruction을 주입하여 성격을 부여합니다.
+        model = genai.GenerativeModel(
+            model_name=model_name,
+            system_instruction=system_prompt
+        )
         
         gemini_history = []
         for msg in messages:
@@ -59,9 +60,8 @@ def ask_gemini(messages, model_name, apikey):
     except Exception as e:
         return f"[답변 에러 발생] 제미나이가 답변을 생성하지 못했습니다. (상세: {e})"
 
-# 텍스트를 음성으로 재생 (TTS) - gTTS 활용
+# 텍스트 -> 음성 (TTS)
 def TTS(response):
-    # 에러 메시지인 경우 읽어주지 않도록 예외 처리
     if "[에러 발생]" in response or "[STT 에러 발생]" in response:
         return
         
@@ -80,15 +80,16 @@ def TTS(response):
                 """
             st.markdown(md, unsafe_allow_html=True)
     except Exception as e:
-        st.error(f"TTS(음성 변환) 오류: {e}")
+        st.error(f"TTS 오류: {e}")
     finally:
         if os.path.exists(filename):
             os.remove(filename)
 
 ##### 2. 메인 웹 화면 구현 #####
 def main():
-    st.set_page_config(page_title="제미나이 음성/텍스트 비서", layout="wide")
+    st.set_page_config(page_title="맞춤형 연애 상담소", layout="wide")
 
+    # 상태 초기화
     if "chat" not in st.session_state:
         st.session_state["chat"] = []
     if "messages" not in st.session_state:
@@ -98,26 +99,38 @@ def main():
     if "last_audio_len" not in st.session_state:
         st.session_state["last_audio_len"] = 0
 
-    st.header("✨ 제미나이(Gemini) AI 비서 프로그램")
+    st.header("💘 당신만을 위한 AI 연애 상담소")
     st.markdown("---")
 
+    # 💡 상담사 페르소나(성격) 정의
+    personas = {
+        "🧊 냉정한 팩폭러": "너는 매우 냉정하고 객관적인 연애 상담사야. 사용자의 감정에 휘둘리지 말고, 상황을 냉철하게 분석해서 뼈를 때리는 팩트 폭력과 함께 현실적인 조언을 해줘. 말투는 차갑고 단호하게 해.",
+        "🥰 무조건 내 편": "너는 무조건 사용자의 편을 들어주는 따뜻한 연애 상담사야. 사용자가 무슨 말을 하든 전적으로 공감해주고, 위로해주며, 필요하다면 상대방을 같이 욕해줘. 다정하고 따뜻한 말투를 사용해.",
+        "🛠️ 극T 해결사": "너는 감정적인 공감보다는 실용적인 해결책을 제시하는 연애 상담사야. 상황을 분석하고, 사용자가 지금 당장 해야 할 구체적인 행동 지침을 1, 2, 3 단계로 명확하고 간결하게 알려줘."
+    }
+
     with st.sidebar:
-        gemini_api_key = st.text_input(label="Gemini API 키", placeholder="Enter Your Gemini API Key", type="password")
+        gemini_api_key = st.text_input(label="Gemini API 키", placeholder="API 키를 입력하세요", type="password")
         st.markdown("---")
         
-        # 💡 에러 확인을 위해 실제 공식 모델도 옵션으로 추가해두었습니다.
-        model_options = {
-            "3.1 Flash Lite (요청하신 모델)": "gemini-3.1-flash-lite",
-            "1.5 Flash (공식 권장 모델)": "gemini-1.5-flash",
-            "1.5 Flash-8B (공식 경량 모델)": "gemini-1.5-flash-8b"
-        }
+        # UI에서 상담사 버전 선택
+        st.subheader("👤 상담사 선택")
+        selected_persona_title = st.radio("어떤 상담을 원하시나요?", list(personas.keys()), index=0)
+        selected_system_prompt = personas[selected_persona_title] # 선택된 성격의 프롬프트 저장
         
-        selected_model_ui = st.radio(label="Gemini 모델 선택", options=list(model_options.keys()), index=0)
+        st.markdown("---")
+        
+        model_options = {
+            "1.5 Flash (권장)": "gemini-1.5-flash",
+            "1.5 Flash-8B": "gemini-1.5-flash-8b",
+            "1.5 Pro": "gemini-1.5-pro"
+        }
+        selected_model_ui = st.selectbox(label="Gemini 모델 선택", options=list(model_options.keys()), index=0)
         model = model_options[selected_model_ui]
         
         st.markdown("---")
         
-        if st.button(label="대화 초기화"):
+        if st.button(label="대화 초기화 (새로운 상담)"):
             st.session_state["chat"] = []
             st.session_state["messages"] = []
             st.session_state["check_reset"] = True
@@ -130,13 +143,13 @@ def main():
     input_type = ""
 
     with col1:
-        st.subheader("질문하기 (음성 또는 텍스트)")
+        st.subheader(f"[{selected_persona_title}]에게 사연 말하기")
         
-        audio = audiorecorder("🎤 클릭하여 녹음하기", "🔴 녹음 중...")
+        audio = audiorecorder("🎤 클릭하여 사연 녹음하기", "🔴 녹음 중...")
         
         with st.form(key="text_input_form", clear_on_submit=True):
-            text_input = st.text_input("💬 텍스트로 질문하기", placeholder="여기에 질문을 입력하고 Enter를 누르세요.")
-            submit_btn = st.form_submit_button(label="전송")
+            text_input = st.text_input("💬 텍스트로 사연 적기", placeholder="연애 고민을 털어놓아 보세요.")
+            submit_btn = st.form_submit_button(label="상담 요청")
 
         if st.session_state["check_reset"]:
             st.session_state["check_reset"] = False
@@ -153,30 +166,27 @@ def main():
                     st.session_state["last_audio_len"] = len(audio)
                     st.audio(audio.export().read())
                     
-                    with st.spinner("음성을 텍스트로 변환 중..."):
-                        # STT에도 사이드바에서 선택한 모델 변수(model)를 넘겨줍니다.
+                    with st.spinner("사연을 듣는 중..."):
                         user_question = STT(audio, gemini_api_key, model)
                     input_type = "audio"
 
-            # 음성 인식 과정에서 에러가 나면 곧바로 사용자에게 알려줍니다.
             if user_question:
                 now = datetime.now().strftime("%H:%M")
                 st.session_state["chat"].append(("user", now, user_question))
-                # 에러 메시지가 아닐 때만 AI 기억(messages)에 저장합니다.
                 if "[에러 발생]" not in user_question and "[STT 에러 발생]" not in user_question:
                     st.session_state["messages"].append({"role": "user", "content": user_question})
 
     with col2:
-        st.subheader("제미나이 답변")
+        st.subheader("상담사 답변")
         
         if user_question:
-            # STT 과정에서 에러가 났다면 답변 생성을 스킵합니다.
             if "[STT 에러 발생]" in user_question:
-                response = "음성을 인식하지 못해 답변을 생성할 수 없습니다. 위 에러 메시지를 확인해주세요."
+                response = "사연을 제대로 듣지 못했어요. 다시 말씀해주시겠어요?"
                 st.session_state["chat"].append(("bot", datetime.now().strftime("%H:%M"), response))
             else:
-                with st.spinner("제미나이가 생각 중입니다..."):
-                    response = ask_gemini(st.session_state["messages"], model, gemini_api_key)
+                with st.spinner(f"{selected_persona_title}가 답변을 고민 중입니다..."):
+                    # 💡 LLM에 질문을 넘길 때, 선택된 시스템 프롬프트(성격)를 같이 넘겨줍니다!
+                    response = ask_gemini(st.session_state["messages"], model, gemini_api_key, selected_system_prompt)
                 
                 if "[답변 에러 발생]" not in response:
                     st.session_state["messages"].append({"role": "model", "content": response})
@@ -184,11 +194,12 @@ def main():
                 now = datetime.now().strftime("%H:%M")
                 st.session_state["chat"].append(("bot", now, response))
 
+        # 채팅 출력 UI
         for sender, time, message in st.session_state["chat"]:
             if sender == "user":
-                st.write(f'<div style="display:flex;align-items:center;"><div style="background-color:#007AFF;color:white;border-radius:12px;padding:8px 12px;margin-right:8px;">{message}</div><div style="font-size:0.8rem;color:gray;">{time}</div></div>', unsafe_allow_html=True)
+                st.write(f'<div style="display:flex;align-items:center;"><div style="background-color:#FFD1DC;color:black;border-radius:12px;padding:8px 12px;margin-right:8px;">{message}</div><div style="font-size:0.8rem;color:gray;">{time}</div></div>', unsafe_allow_html=True)
             else:
-                st.write(f'<div style="display:flex;align-items:center;justify-content:flex-end;"><div style="background-color:lightgray;color:black;border-radius:12px;padding:8px 12px;margin-left:8px;">{message}</div><div style="font-size:0.8rem;color:gray;">{time}</div></div>', unsafe_allow_html=True)
+                st.write(f'<div style="display:flex;align-items:center;justify-content:flex-end;"><div style="background-color:#F0F0F0;color:black;border-radius:12px;padding:8px 12px;margin-left:8px;">{message}</div><div style="font-size:0.8rem;color:gray;">{time}</div></div>', unsafe_allow_html=True)
             st.write("")
         
         if user_question and input_type == "audio":
