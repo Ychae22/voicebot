@@ -39,7 +39,7 @@ def STT(audio, apikey, model_name):
             
     return result_text
 
-# 텍스트 답변 생성 (LLM) - 무한 로딩 방지용 예외 처리 포함
+# 텍스트 답변 생성 (LLM)
 def ask_gemini(messages, model_name, apikey, system_prompt):
     genai.configure(api_key=apikey)
     
@@ -61,7 +61,7 @@ def ask_gemini(messages, model_name, apikey, system_prompt):
         response = chat.send_message(current_msg)
         return response.text
     except Exception as e:
-        return f"[답변 에러 발생] 제미나이가 답변을 생성하지 못했습니다. API 키나 네트워크를 확인해주세요. (상세: {e})"
+        return f"[답변 에러 발생] 제미나이가 답변을 생성하지 못했습니다. (상세: {e})"
 
 # 텍스트 -> 음성 (TTS)
 def TTS(response):
@@ -92,6 +92,7 @@ def TTS(response):
 def main():
     st.set_page_config(page_title="환장연애 - AI 연애 상담소", layout="wide")
 
+    # 💡 [핵심 수정] chats와 messages 모두 딕셔너리({})로 안전하게 초기화
     if "chats" not in st.session_state:
         st.session_state["chats"] = {}      
     if "messages" not in st.session_state:
@@ -163,10 +164,8 @@ def main():
         
         st.markdown("---")
         
-        # 💡 [핵심 수정] 서버에서 확실히 지원하는 안정적인 공식 모델로 변경
         model_options = {
-            "1.5 Flash (추천)": "gemini-1.5-flash",
-            "1.5 Flash-8B": "gemini-1.5-flash-8b"
+            "3.1 Flash Lite": "gemini-3.1-flash-lite"
         }
         selected_model_ui = st.radio(label="Gemini 모델 선택", options=list(model_options.keys()), index=0)
         model = model_options[selected_model_ui]
@@ -182,6 +181,7 @@ def main():
             st.session_state["last_audio_len"] = 0
             st.rerun()
 
+    # 현재 선택된 상담사 키값에 해당하는 리스트가 없으면 안전하게 생성
     if selected_persona_title not in st.session_state["chats"]:
         st.session_state["chats"][selected_persona_title] = []
     if selected_persona_title not in st.session_state["messages"]:
