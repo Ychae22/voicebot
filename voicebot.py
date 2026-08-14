@@ -5,6 +5,7 @@ import os
 from datetime import datetime
 from gtts import gTTS
 import base64
+import json
 
 ##### 1. 기능 구현 함수 #####
 
@@ -63,6 +64,24 @@ def ask_gemini(messages, model_name, apikey, system_prompt):
     except Exception as e:
         return f"[답변 에러 발생] 제미나이가 답변을 생성하지 못했습니다. (상세: {e})"
 
+# 💡 [1단계 추가] 상담 내용을 분석해 핵심 키워드를 뽑아내는 함수
+def extract_keyword(latest_message, apikey, model_name):
+    genai.configure(api_key=apikey)
+    try:
+        model = genai.GenerativeModel(model_name)
+        prompt = f"""
+        다음 연애 상담 내용을 분석해서 아래 보기 중 가장 잘 어울리는 키워드 단 하나만 골라줘.
+        보기: [장거리 연애, 환승 이별 의심, 회피형 연인, 권태기 극복, 썸 타는 중, 짝사랑, 이별 후 재회, 기타]
+        
+        다른 말은 절대 하지 말고 키워드 이름만 딱 뱉어줘. (예: 회피형 연인)
+        
+        상담 내용: {latest_message}
+        """
+        response = model.generate_content(prompt)
+        return response.text.strip()
+    except:
+        return "기타"
+
 # 텍스트 -> 음성 (TTS)
 def TTS(response):
     if "[에러 발생]" in response or "[STT 에러 발생]" in response:
@@ -92,11 +111,12 @@ def TTS(response):
 def main():
     st.set_page_config(page_title="환장연애 - AI 연애 상담소", layout="wide")
 
-    # 💡 [핵심 수정] chats와 messages 모두 딕셔너리({})로 안전하게 초기화
     if "chats" not in st.session_state:
         st.session_state["chats"] = {}      
     if "messages" not in st.session_state:
         st.session_state["messages"] = {}   
+    if "keywords" not in st.session_state:
+        st.session_state["keywords"] = {} # 💡 모드별 키워드 저장소 추가
     if "check_reset" not in st.session_state:
         st.session_state["check_reset"] = False
     if "last_audio_len" not in st.session_state:
@@ -177,15 +197,18 @@ def main():
                 st.session_state["chats"][selected_persona_title] = []
             if selected_persona_title in st.session_state["messages"]:
                 st.session_state["messages"][selected_persona_title] = []
+            if selected_persona_title in st.session_state["keywords"]:
+                st.session_state["keywords"][selected_persona_title] = "분석 전"
             st.session_state["check_reset"] = True
             st.session_state["last_audio_len"] = 0
             st.rerun()
 
-    # 현재 선택된 상담사 키값에 해당하는 리스트가 없으면 안전하게 생성
     if selected_persona_title not in st.session_state["chats"]:
         st.session_state["chats"][selected_persona_title] = []
     if selected_persona_title not in st.session_state["messages"]:
         st.session_state["messages"][selected_persona_title] = []
+    if selected_persona_title not in st.session_state["keywords"]:
+        st.session_state["keywords"][selected_persona_title] = "분석 전"
 
     col1, col2 = st.columns(2)
     
@@ -225,9 +248,22 @@ def main():
                 st.session_state["chats"][selected_persona_title].append(("user", now, user_question))
                 if "[에러 발생]" not in user_question and "[STT 에러 발생]" not in user_question:
                     st.session_state["messages"][selected_persona_title].append({"role": "user", "content": user_question})
+                    
+                    # 💡 [1단계 핵심] 질문이 들어오면 백그라운드에서 키워드 자동 추출
+                    extracted = extract_keyword(user_question, gemini_api_key, model)
+                    st.session_state["keywords"][selected_persona_title] = extracted
 
     with col2:
         st.subheader("상담사 답변")
+        
+        # 💡 [1단계 UI] 현재 감지된 고민 키워드를 상단에 예쁘게 뱃지로 표시
+        current_keyword = st.session_state["keywords"][selected_persona_title]
+        st.markdown(f"""
+            <div style="background-color: #fff0f3; border: 1px solid #ffb3c1; padding: 10px 15px; border-radius: 10px; margin-bottom: 15px; display: flex; align-items: center;">
+                <span style="font-weight: bold; color: #d90429; margin-right: 10px;">🏷️ 감지된 나의 고민 키워드:</span>
+                <span style="background-color: #d90429; color: white; padding: 3px 10px; border-radius: 20px; font-size: 0.9rem; font-weight: bold;">#{current_keyword}</span>
+            </div>
+        """, unsafe_allow_html=True)
         
         if user_question:
             if "[STT 에러 발생]" in user_question:
