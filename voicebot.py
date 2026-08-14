@@ -16,7 +16,6 @@ def STT(audio, apikey):
     genai.configure(api_key=apikey)
     audio_file = genai.upload_file(path=filename)
     
-    # 💡 STT 모델을 3.1 flash lite로 지정
     model = genai.GenerativeModel('gemini-3.1-flash-lite')
     response = model.generate_content([
         "이 오디오에서 들리는 말을 한국어 텍스트로만 정확하게 받아적어줘. 다른 말은 절대 덧붙이지 마.", 
@@ -85,7 +84,6 @@ def main():
         gemini_api_key = st.text_input(label="Gemini API 키", placeholder="Enter Your Gemini API Key", type="password")
         st.markdown("---")
         
-        # 💡 UI 옵션을 3.1 Flash Lite 하나로 깔끔하게 통일
         model_options = {
             "3.1 Flash Lite": "gemini-3.1-flash-lite"
         }
@@ -105,7 +103,8 @@ def main():
     # 화면 2분할
     col1, col2 = st.columns(2)
     
-    user_question = "" # 음성이든 텍스트든 질문을 담을 변수
+    user_question = "" 
+    input_type = ""  # 💡 질문 방식을 확인하기 위한 변수 (text 또는 audio)
 
     with col1:
         st.subheader("질문하기 (음성 또는 텍스트)")
@@ -113,7 +112,7 @@ def main():
         # 1. 음성 입력 위젯
         audio = audiorecorder("🎤 클릭하여 녹음하기", "🔴 녹음 중...")
         
-        # 2. 텍스트 입력 위젯 (Form을 사용하여 Enter 입력 시 한 번에 제출되도록 구성)
+        # 2. 텍스트 입력 위젯
         with st.form(key="text_input_form", clear_on_submit=True):
             text_input = st.text_input("💬 텍스트로 질문하기", placeholder="여기에 질문을 입력하고 Enter를 누르세요.")
             submit_btn = st.form_submit_button(label="전송")
@@ -126,17 +125,19 @@ def main():
             if not gemini_api_key and (len(audio) > 0 or submit_btn):
                 st.error("좌측 사이드바에 Gemini API 키를 입력해주세요!")
             else:
-                # 텍스트 입력이 제출된 경우 최우선으로 처리
+                # 텍스트 입력이 제출된 경우
                 if submit_btn and text_input:
                     user_question = text_input
+                    input_type = "text"  # 💡 텍스트 입력으로 기록
                     
-                # 새로운 음성이 녹음된 경우 처리 (기존 녹음본 재실행 방지)
+                # 새로운 음성이 녹음된 경우
                 elif len(audio) > 0 and len(audio) != st.session_state["last_audio_len"]:
                     st.session_state["last_audio_len"] = len(audio)
                     st.audio(audio.export().read())
                     
                     with st.spinner("음성을 텍스트로 변환 중..."):
                         user_question = STT(audio, gemini_api_key)
+                    input_type = "audio"  # 💡 음성 입력으로 기록
 
             # 질문이 접수되었으면 대화 내역에 추가
             if user_question:
@@ -164,8 +165,8 @@ def main():
                 st.write(f'<div style="display:flex;align-items:center;justify-content:flex-end;"><div style="background-color:lightgray;color:black;border-radius:12px;padding:8px 12px;margin-left:8px;">{message}</div><div style="font-size:0.8rem;color:gray;">{time}</div></div>', unsafe_allow_html=True)
             st.write("")
         
-        # 새로운 답변이 방금 생성된 경우에만 TTS(음성 읽어주기) 실행
-        if user_question:
+        # 💡 새로운 답변이 생성되었고, 입력 방식이 '음성(audio)'일 때만 읽어주기 실행
+        if user_question and input_type == "audio":
             TTS(response)
 
 if __name__ == "__main__":
