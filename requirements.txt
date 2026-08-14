@@ -2,4 +2,3 @@ streamlit
 audiorecorder
 google-generativeai
 gtts
-supabase
