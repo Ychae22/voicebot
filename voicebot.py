@@ -92,11 +92,11 @@ def TTS(response):
 def main():
     st.set_page_config(page_title="환장연애 - AI 연애 상담소", layout="wide")
 
-    # 💡 [상담사별 대화 기록을 관리하기 위한 세션 초기화]
+    # 💡 [핵심 수정] chats와 messages 모두 딕셔너리({})로 안전하게 초기화
     if "chats" not in st.session_state:
-        st.session_state["chats"] = {}      # 모드별 UI 채팅 내역
+        st.session_state["chats"] = {}      
     if "messages" not in st.session_state:
-        st.session_state["messages"] = {}   # 모드별 LLM 기억(history)
+        st.session_state["messages"] = {}   
     if "check_reset" not in st.session_state:
         st.session_state["check_reset"] = False
     if "last_audio_len" not in st.session_state:
@@ -149,7 +149,6 @@ def main():
         st.subheader("👤 상담사 선택")
         selected_persona_title = st.radio("어떤 상담을 원하시나요?", list(personas.keys()), index=0)
         
-        # 💡 [상담사가 변경되었을 때 이전 대화가 섞이지 않도록 처리]
         if st.session_state["prev_persona"] != selected_persona_title:
             st.session_state["prev_persona"] = selected_persona_title
             st.session_state["last_audio_len"] = 0
@@ -182,7 +181,7 @@ def main():
             st.session_state["last_audio_len"] = 0
             st.rerun()
 
-    # 현재 선택된 상담사 키값에 해당하는 대화 리스트가 없으면 생성
+    # 현재 선택된 상담사 키값에 해당하는 리스트가 없으면 안전하게 생성
     if selected_persona_title not in st.session_state["chats"]:
         st.session_state["chats"][selected_persona_title] = []
     if selected_persona_title not in st.session_state["messages"]:
@@ -244,7 +243,6 @@ def main():
                 now = datetime.now().strftime("%H:%M")
                 st.session_state["chats"][selected_persona_title].append(("bot", now, response))
 
-        # 현재 선택된 상담사의 대화 내역만 화면에 출력
         for sender, time, message in st.session_state["chats"][selected_persona_title]:
             if sender == "user":
                 st.write(f'<div style="display:flex;align-items:center;"><div style="background-color:#FFD1DC;color:black;border-radius:12px;padding:8px 12px;margin-right:8px;">{message}</div><div style="font-size:0.8rem;color:gray;">{time}</div></div>', unsafe_allow_html=True)
