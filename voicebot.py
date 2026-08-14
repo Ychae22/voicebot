@@ -8,7 +8,7 @@ import base64
 
 ##### 1. 기능 구현 함수 #####
 
-# 음성 -> 텍스트 (STT) - 💡 업로드 방식 대신 다이렉트 데이터 전달 방식으로 변경
+# 음성 -> 텍스트 (STT) - 업로드 방식 대신 다이렉트 데이터 전달 방식
 def STT(audio, apikey, model_name):
     filename = 'input.mp3'
     audio.export(filename, format="mp3")
@@ -18,7 +18,6 @@ def STT(audio, apikey, model_name):
     try:
         model = genai.GenerativeModel(model_name)
         
-        # 파일을 서버에 업로드하지 않고 파이썬에서 직접 읽어서 데이터로 만듦
         with open(filename, "rb") as f:
             audio_bytes = f.read()
             
@@ -35,7 +34,6 @@ def STT(audio, apikey, model_name):
     except Exception as e:
         result_text = f"[STT 에러 발생] 음성 인식 중 문제가 발생했습니다. (상세: {e})"
     finally:
-        # 파일 업로드를 안 했으므로 delete_file은 삭제, 로컬 임시 파일만 지움
         if os.path.exists(filename):
             os.remove(filename)
             
@@ -151,7 +149,7 @@ def main():
     col1, col2 = st.columns(2)
     
     user_question = "" 
-    input_type = ""
+    input_type = "" # 💡 입력 방식(text 또는 audio)을 판별하기 위한 변수
 
     with col1:
         st.subheader(f"[{selected_persona_title}]에게 사연 말하기")
@@ -171,7 +169,7 @@ def main():
             else:
                 if submit_btn and text_input:
                     user_question = text_input
-                    input_type = "text"
+                    input_type = "text"  # 💡 텍스트 입력 기록
                     
                 elif len(audio) > 0 and len(audio) != st.session_state["last_audio_len"]:
                     st.session_state["last_audio_len"] = len(audio)
@@ -179,7 +177,7 @@ def main():
                     
                     with st.spinner("사연을 듣는 중..."):
                         user_question = STT(audio, gemini_api_key, model)
-                    input_type = "audio"
+                    input_type = "audio"  # 💡 음성 입력 기록
 
             if user_question:
                 now = datetime.now().strftime("%H:%M")
@@ -212,6 +210,7 @@ def main():
                 st.write(f'<div style="display:flex;align-items:center;justify-content:flex-end;"><div style="background-color:#F0F0F0;color:black;border-radius:12px;padding:8px 12px;margin-left:8px;">{message}</div><div style="font-size:0.8rem;color:gray;">{time}</div></div>', unsafe_allow_html=True)
             st.write("")
         
+        # 💡 오직 음성(audio)으로 질문했을 때만 TTS(음성 출력) 실행!
         if user_question and input_type == "audio":
             TTS(response)
 
