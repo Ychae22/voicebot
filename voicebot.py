@@ -5,6 +5,17 @@ import os
 from datetime import datetime
 from gtts import gTTS
 import base64
+from supabase import create_client, Client
+
+##### 0. Supabase 연결 설정 #####
+SUPABASE_URL = "https://rjccpvfatkkivxjmumso.supabase.co"
+SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJqY2NwdmZhdGtraXZ4am11bXNvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODY2ODY0MzQsImV4cCI6MjEwMjI2MjQzNH0.YZsx323X3gEaY58MIR3zcLPZcGxPm0iMdm0ddLn3ysk"
+
+@st.cache_resource
+def init_supabase():
+    return create_client(SUPABASE_URL, SUPABASE_KEY)
+
+supabase: Client = init_supabase()
 
 ##### 1. 기능 구현 함수 #####
 
@@ -63,7 +74,7 @@ def ask_gemini(messages, model_name, apikey, system_prompt):
     except Exception as e:
         return f"[답변 에러 발생] 제미나이가 답변을 생성하지 못했습니다. (상세: {e})"
 
-# 💡 [1단계 추가] 상담 내용을 분석해 핵심 키워드를 뽑아내는 함수
+# 상담 내용 분석해 핵심 키워드 뽑아내는 함수
 def extract_keyword(latest_message, apikey, model_name):
     genai.configure(api_key=apikey)
     try:
@@ -80,6 +91,19 @@ def extract_keyword(latest_message, apikey, model_name):
         return response.text.strip()
     except:
         return "기타"
+
+# 💡 [3단계 추가] Supabase DB에 상담 데이터 저장하는 함수
+def save_consultation_to_db(user_id, persona, keyword, content):
+    try:
+        data = {
+            "user_id": user_id,
+            "persona": persona,
+            "keyword": keyword,
+            "content": content
+        }
+        supabase.table("consultations").insert(data).execute()
+    except Exception as e:
+        print(f"DB 저장 실패: {e}")
 
 # 텍스트 -> 음성 (TTS)
 def TTS(response):
@@ -110,12 +134,16 @@ def TTS(response):
 def main():
     st.set_page_config(page_title="환장연애 - AI 연애 상담소", layout="wide")
 
+    # 브라우저별 고유 유저 ID 생성 (익명 매칭용)
+    if "user_id" not in st.session_state:
+        st.session_state["user_id"] = f"user_{datetime.now().strftime('%Y%m%d%H%M%S_%f')}"
+
     if "chats" not in st.session_state:
         st.session_state["chats"] = {}      
     if "messages" not in st.session_state:
         st.session_state["messages"] = {}   
     if "keywords" not in st.session_state:
-        st.session_state["keywords"] = {} # 💡 모드별 키워드 저장소 추가
+        st.session_state["keywords"] = {} 
     if "check_reset" not in st.session_state:
         st.session_state["check_reset"] = False
     if "last_audio_len" not in st.session_state:
@@ -245,17 +273,24 @@ def main():
             if user_question:
                 now = datetime.now().strftime("%H:%M")
                 st.session_state["chats"][selected_persona_title].append(("user", now, user_question))
-                if "[에러 발생]" not in user_question and "[STT 에러 발생]" not in user_question:
+                if "[え러 발생]" not in user_question and "[STT 에러 발생]" not in user_question:
                     st.session_state["messages"][selected_persona_title].append({"role": "user", "content": user_question})
                     
-                    # 💡 [1단계 핵심] 질문이 들어오면 키워드 자동 추출 후 저장
+                    # 키워드 추출
                     extracted = extract_keyword(user_question, gemini_api_key, model)
                     st.session_state["keywords"][selected_persona_title] = extracted
+
+                    # 💡 [3단계 핵심] Supabase DB에 데이터 저장 실행!
+                    save_consultation_to_db(
+                        user_id=st.session_state["user_id"],
+                        persona=selected_persona_title,
+                        keyword=extracted,
+                        content=user_question
+                    )
 
     with col2:
         st.subheader("상담사 답변")
         
-        # 💡 [1단계 UI] 화면 상단에 감지된 키워드 뱃지 표시
         current_keyword = st.session_state["keywords"][selected_persona_title]
         st.markdown(f"""
             <div style="background-color: #fff0f3; border: 1px solid #ffb3c1; padding: 10px 15px; border-radius: 10px; margin-bottom: 15px; display: flex; align-items: center;">
