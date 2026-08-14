@@ -64,7 +64,7 @@ def TTS(response):
 
 ##### 2. 메인 웹 화면 구현 #####
 def main():
-    st.set_page_config(page_title="제미나이 음성 비서", layout="wide")
+    st.set_page_config(page_title="제미나이 음성/텍스트 비서", layout="wide")
 
     # 세션 상태 초기화
     if "chat" not in st.session_state:
@@ -73,8 +73,10 @@ def main():
         st.session_state["messages"] = []
     if "check_reset" not in st.session_state:
         st.session_state["check_reset"] = False
+    if "last_audio_len" not in st.session_state:
+        st.session_state["last_audio_len"] = 0  # 중복 음성 처리 방지용
 
-    st.header("✨ 제미나이(Gemini) 음성 비서 프로그램")
+    st.header("✨ 제미나이(Gemini) AI 비서 프로그램")
     st.markdown("---")
 
     # 사이드바 설정
@@ -82,15 +84,13 @@ def main():
         gemini_api_key = st.text_input(label="Gemini API 키", placeholder="Enter Your Gemini API Key", type="password")
         st.markdown("---")
         
-        # 💡 UI에 보여줄 이름과 실제 API 모델명을 매핑(연결)해줍니다.
         model_options = {
             "1.5 Flash-8B (가장 빠른 답변)": "gemini-1.5-flash-8b",
             "1.5 Flash (무엇이든 도움)": "gemini-1.5-flash",
             "1.5 Pro (고급 수학 및 코딩)": "gemini-1.5-pro"
         }
         
-        # 사용자는 익숙한 이름을 선택하지만, 코드 내부에서는 API용 이름을 사용합니다.
-        selected_model_ui = st.radio(label="Gemini 모델 선택", options=list(model_options.keys()), index=2) # 기본값을 1.5 Pro로 설정
+        selected_model_ui = st.radio(label="Gemini 모델 선택", options=list(model_options.keys()), index=2)
         model = model_options[selected_model_ui]
         
         st.markdown("---")
@@ -99,31 +99,56 @@ def main():
             st.session_state["chat"] = []
             st.session_state["messages"] = []
             st.session_state["check_reset"] = True
+            st.session_state["last_audio_len"] = 0
+            st.rerun()
 
     # 화면 2분할
     col1, col2 = st.columns(2)
     
+    user_question = "" # 음성이든 텍스트든 질문을 담을 변수
+
     with col1:
-        st.subheader("마이크로 질문하기")
+        st.subheader("질문하기 (음성 또는 텍스트)")
+        
+        # 1. 음성 입력 위젯
         audio = audiorecorder("🎤 클릭하여 녹음하기", "🔴 녹음 중...")
         
-        if (audio.duration_seconds > 0) and not st.session_state["check_reset"]:
-            if not gemini_api_key:
+        # 2. 텍스트 입력 위젯 (Form을 사용하여 Enter 입력 시 한 번에 제출되도록 구성)
+        with st.form(key="text_input_form", clear_on_submit=True):
+            text_input = st.text_input("💬 텍스트로 질문하기", placeholder="여기에 질문을 입력하고 Enter를 누르세요.")
+            submit_btn = st.form_submit_button(label="전송")
+
+        # 초기화 상태 해제
+        if st.session_state["check_reset"]:
+            st.session_state["check_reset"] = False
+            
+        else:
+            if not gemini_api_key and (len(audio) > 0 or submit_btn):
                 st.error("좌측 사이드바에 Gemini API 키를 입력해주세요!")
-                return
-            
-            st.audio(audio.export().read())
-            
-            with st.spinner("음성을 텍스트로 변환 중..."):
-                question = STT(audio, gemini_api_key)
-            
-            now = datetime.now().strftime("%H:%M")
-            st.session_state["chat"].append(("user", now, question))
-            st.session_state["messages"].append({"role": "user", "content": question})
+            else:
+                # 텍스트 입력이 제출된 경우 최우선으로 처리
+                if submit_btn and text_input:
+                    user_question = text_input
+                    
+                # 새로운 음성이 녹음된 경우 처리 (기존 녹음본 재실행 방지)
+                elif len(audio) > 0 and len(audio) != st.session_state["last_audio_len"]:
+                    st.session_state["last_audio_len"] = len(audio)
+                    st.audio(audio.export().read())
+                    
+                    with st.spinner("음성을 텍스트로 변환 중..."):
+                        user_question = STT(audio, gemini_api_key)
+
+            # 질문이 접수되었으면 대화 내역에 추가
+            if user_question:
+                now = datetime.now().strftime("%H:%M")
+                st.session_state["chat"].append(("user", now, user_question))
+                st.session_state["messages"].append({"role": "user", "content": user_question})
 
     with col2:
         st.subheader("제미나이 답변")
-        if (audio.duration_seconds > 0) and not st.session_state["check_reset"]:
+        
+        # 새로운 질문(user_question)이 들어왔을 때만 답변 생성
+        if user_question:
             with st.spinner("제미나이가 생각 중입니다..."):
                 response = ask_gemini(st.session_state["messages"], model, gemini_api_key)
             
@@ -131,7 +156,7 @@ def main():
             now = datetime.now().strftime("%H:%M")
             st.session_state["chat"].append(("bot", now, response))
 
-        # 채팅 UI 출력
+        # 채팅 UI 출력 (전체 대화 내역)
         for sender, time, message in st.session_state["chat"]:
             if sender == "user":
                 st.write(f'<div style="display:flex;align-items:center;"><div style="background-color:#007AFF;color:white;border-radius:12px;padding:8px 12px;margin-right:8px;">{message}</div><div style="font-size:0.8rem;color:gray;">{time}</div></div>', unsafe_allow_html=True)
@@ -139,7 +164,8 @@ def main():
                 st.write(f'<div style="display:flex;align-items:center;justify-content:flex-end;"><div style="background-color:lightgray;color:black;border-radius:12px;padding:8px 12px;margin-left:8px;">{message}</div><div style="font-size:0.8rem;color:gray;">{time}</div></div>', unsafe_allow_html=True)
             st.write("")
         
-        if (audio.duration_seconds > 0) and not st.session_state["check_reset"]:
+        # 새로운 답변이 방금 생성된 경우에만 TTS(음성 읽어주기) 실행
+        if user_question:
             TTS(response)
 
 if __name__ == "__main__":
