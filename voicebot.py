@@ -120,12 +120,11 @@ def main():
         
         st.markdown("---")
         
+        # 💡 오직 3.1 Flash Lite만 남김!
         model_options = {
-            "1.5 Flash (권장)": "gemini-1.5-flash",
-            "1.5 Flash-8B": "gemini-1.5-flash-8b",
-            "1.5 Pro": "gemini-1.5-pro"
+            "3.1 Flash Lite": "gemini-3.1-flash-lite"
         }
-        selected_model_ui = st.selectbox(label="Gemini 모델 선택", options=list(model_options.keys()), index=0)
+        selected_model_ui = st.radio(label="Gemini 모델 선택", options=list(model_options.keys()), index=0)
         model = model_options[selected_model_ui]
         
         st.markdown("---")
@@ -185,7 +184,6 @@ def main():
                 st.session_state["chat"].append(("bot", datetime.now().strftime("%H:%M"), response))
             else:
                 with st.spinner(f"{selected_persona_title}가 답변을 고민 중입니다..."):
-                    # 💡 LLM에 질문을 넘길 때, 선택된 시스템 프롬프트(성격)를 같이 넘겨줍니다!
                     response = ask_gemini(st.session_state["messages"], model, gemini_api_key, selected_system_prompt)
                 
                 if "[답변 에러 발생]" not in response:
