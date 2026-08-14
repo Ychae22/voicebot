@@ -1,10 +1,10 @@
-from datetime import datetime
-import base64
-import os
 import streamlit as st
 from audiorecorder import audiorecorder
 import google.generativeai as genai
+import os
+from datetime import datetime
 from gtts import gTTS
+import base64
 
 ##### 1. 기능 구현 함수 #####
 
@@ -92,11 +92,13 @@ def TTS(response):
 def main():
     st.set_page_config(page_title="환장연애 - AI 연애 상담소", layout="wide")
 
-    # 세션 상태 초기화
+    # 💡 [핵심 수정] chats와 messages 모두 딕셔너리({})로 안전하게 초기화
     if "chats" not in st.session_state:
         st.session_state["chats"] = {}      
     if "messages" not in st.session_state:
         st.session_state["messages"] = {}   
+    if "check_reset" not in st.session_state:
+        st.session_state["check_reset"] = False
     if "last_audio_len" not in st.session_state:
         st.session_state["last_audio_len"] = 0
     if "prev_persona" not in st.session_state:
@@ -163,7 +165,7 @@ def main():
         st.markdown("---")
         
         model_options = {
-            "3.1 Flash Lite": "gemini-2.5-flash"
+            "3.1 Flash Lite": "gemini-3.1-flash-lite"
         }
         selected_model_ui = st.radio(label="Gemini 모델 선택", options=list(model_options.keys()), index=0)
         model = model_options[selected_model_ui]
@@ -175,10 +177,11 @@ def main():
                 st.session_state["chats"][selected_persona_title] = []
             if selected_persona_title in st.session_state["messages"]:
                 st.session_state["messages"][selected_persona_title] = []
+            st.session_state["check_reset"] = True
             st.session_state["last_audio_len"] = 0
             st.rerun()
 
-    # 현재 페르소나 세션 초기화
+    # 현재 선택된 상담사 키값에 해당하는 리스트가 없으면 안전하게 생성
     if selected_persona_title not in st.session_state["chats"]:
         st.session_state["chats"][selected_persona_title] = []
     if selected_persona_title not in st.session_state["messages"]:
@@ -192,45 +195,44 @@ def main():
     with col1:
         st.subheader(f"[{selected_persona_title}]에게 사연 말하기")
         
-        # 음성 녹음기
         audio = audiorecorder("🎤 클릭하여 사연 녹음하기", "🔴 녹음 중...")
         
-        # 텍스트 입력창
         with st.form(key="text_input_form", clear_on_submit=True):
             text_input = st.text_input("💬 텍스트로 사연 적기", placeholder="연애 고민을 털어놓아 보세요.")
             submit_btn = st.form_submit_button(label="상담 요청")
 
-        if not gemini_api_key and (len(audio) > 0 or submit_btn):
-            st.error("좌측 사이드바에 Gemini API 키를 입력해주세요!")
-        else:
-            # 텍스트 입력 제출 시
-            if submit_btn and text_input:
-                user_question = text_input
-                input_type = "text"
+        if st.session_state["check_reset"]:
+            st.session_state["check_reset"] = False
             
-            # 음성 녹음 완료 시 (이전 녹음 길이와 비교하여 중복 실행 방지)
-            elif len(audio) > 0 and len(audio) != st.session_state["last_audio_len"]:
-                st.session_state["last_audio_len"] = len(audio)
-                st.audio(audio.export().read())
-                
-                with st.spinner("사연을 듣는 중..."):
-                    user_question = STT(audio, gemini_api_key, model)
-                input_type = "audio"
+        else:
+            if not gemini_api_key and (len(audio) > 0 or submit_btn):
+                st.error("좌측 사이드바에 Gemini API 키를 입력해주세요!")
+            else:
+                if submit_btn and text_input:
+                    user_question = text_input
+                    input_type = "text"
+                    
+                elif len(audio) > 0 and len(audio) != st.session_state["last_audio_len"]:
+                    st.session_state["last_audio_len"] = len(audio)
+                    st.audio(audio.export().read())
+                    
+                    with st.spinner("사연을 듣는 중..."):
+                        user_question = STT(audio, gemini_api_key, model)
+                    input_type = "audio"
 
-        # 사용자 입력이 들어온 경우 세션에 저장
-        if user_question:
-            now = datetime.now().strftime("%H:%M")
-            st.session_state["chats"][selected_persona_title].append(("user", now, user_question))
-            if "[에러 발생]" not in user_question and "[STT 에러 발생]" not in user_question:
-                st.session_state["messages"][selected_persona_title].append({"role": "user", "content": user_question})
+            if user_question:
+                now = datetime.now().strftime("%H:%M")
+                st.session_state["chats"][selected_persona_title].append(("user", now, user_question))
+                if "[에러 발생]" not in user_question and "[STT 에러 발생]" not in user_question:
+                    st.session_state["messages"][selected_persona_title].append({"role": "user", "content": user_question})
 
     with col2:
         st.subheader("상담사 답변")
         
-        response = ""
         if user_question:
             if "[STT 에러 발생]" in user_question:
                 response = "사연을 제대로 듣지 못했어요. 다시 말씀해주시겠어요?"
+                st.session_state["chats"][selected_persona_title].append(("bot", datetime.now().strftime("%H:%M"), response))
             else:
                 with st.spinner(f"{selected_persona_title}가 답변을 고민 중입니다..."):
                     response = ask_gemini(st.session_state["messages"][selected_persona_title], model, gemini_api_key, selected_system_prompt)
@@ -241,7 +243,6 @@ def main():
                 now = datetime.now().strftime("%H:%M")
                 st.session_state["chats"][selected_persona_title].append(("bot", now, response))
 
-        # 대화 기록 출력
         for sender, time, message in st.session_state["chats"][selected_persona_title]:
             if sender == "user":
                 st.write(f'<div style="display:flex;align-items:center;"><div style="background-color:#FFD1DC;color:black;border-radius:12px;padding:8px 12px;margin-right:8px;">{message}</div><div style="font-size:0.8rem;color:gray;">{time}</div></div>', unsafe_allow_html=True)
@@ -249,8 +250,7 @@ def main():
                 st.write(f'<div style="display:flex;align-items:center;justify-content:flex-end;"><div style="background-color:#F0F0F0;color:black;border-radius:12px;padding:8px 12px;margin-left:8px;">{message}</div><div style="font-size:0.8rem;color:gray;">{time}</div></div>', unsafe_allow_html=True)
             st.write("")
         
-        # 음성 입력이었을 경우에만 TTS 재생 (최신 응답 기준)
-        if user_question and input_type == "audio" and response:
+        if user_question and input_type == "audio":
             TTS(response)
 
 if __name__ == "__main__":
