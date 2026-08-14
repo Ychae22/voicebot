@@ -1,4 +1,5 @@
 streamlit
-streamlit-audiorecorder
+audiorecorder
 google-generativeai
-gTTS
+gtts
+supabase
