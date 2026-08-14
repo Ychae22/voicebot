@@ -92,16 +92,19 @@ def TTS(response):
 def main():
     st.set_page_config(page_title="환장연애 - AI 연애 상담소", layout="wide")
 
-    if "chat" not in st.session_state:
-        st.session_state["chat"] = []
+    # 💡 [상담사별 대화 기록을 관리하기 위한 세션 초기화]
+    if "chats" not in st.session_state:
+        st.session_state["chats"] = {}      # 모드별 UI 채팅 내역
     if "messages" not in st.session_state:
-        st.session_state["messages"] = []
+        st.session_state["messages"] = {}   # 모드별 LLM 기억(history)
     if "check_reset" not in st.session_state:
         st.session_state["check_reset"] = False
     if "last_audio_len" not in st.session_state:
         st.session_state["last_audio_len"] = 0
+    if "prev_persona" not in st.session_state:
+        st.session_state["prev_persona"] = ""
 
-    # 💡 [CSS로 이미지 크기를 줄여서 배너처럼 가로로 띄우기]
+    # 배너 이미지 출력
     if os.path.exists("banner.png"):
         st.markdown(
             """
@@ -113,8 +116,8 @@ def main():
             }
             .banner-container img {
                 width: 100%;
-                max-height: 180px; /* 높이를 제한하여 배너 모양으로 만듦 */
-                object-fit: cover; /* 이미지가 찌그러지지 않고 비율을 유지하며 채워짐 */
+                max-height: 180px;
+                object-fit: cover;
                 border-radius: 12px;
                 box-shadow: 0 4px 10px rgba(0,0,0,0.1);
             }
@@ -123,7 +126,6 @@ def main():
             unsafe_allow_html=True
         )
         
-        # 이미지를 읽어서 Base64로 변환 후 HTML로 출력
         with open("banner.png", "rb") as img_file:
             img_bytes = img_file.read()
             img_b64 = base64.b64encode(img_bytes).decode()
@@ -147,6 +149,11 @@ def main():
         st.subheader("👤 상담사 선택")
         selected_persona_title = st.radio("어떤 상담을 원하시나요?", list(personas.keys()), index=0)
         
+        # 💡 [상담사가 변경되었을 때 이전 대화가 섞이지 않도록 처리]
+        if st.session_state["prev_persona"] != selected_persona_title:
+            st.session_state["prev_persona"] = selected_persona_title
+            st.session_state["last_audio_len"] = 0
+
         if selected_persona_title == "✍️ 직접 성향 입력하기":
             custom_prompt = st.text_area(
                 "상담사의 성격, 말투, 상황을 자세히 적어주세요.", 
@@ -166,12 +173,20 @@ def main():
         
         st.markdown("---")
         
-        if st.button(label="대화 초기화 (새로운 상담)"):
-            st.session_state["chat"] = []
-            st.session_state["messages"] = []
+        if st.button(label="대화 초기화 (현재 상담만)"):
+            if selected_persona_title in st.session_state["chats"]:
+                st.session_state["chats"][selected_persona_title] = []
+            if selected_persona_title in st.session_state["messages"]:
+                st.session_state["messages"][selected_persona_title] = []
             st.session_state["check_reset"] = True
             st.session_state["last_audio_len"] = 0
             st.rerun()
+
+    # 현재 선택된 상담사 키값에 해당하는 대화 리스트가 없으면 생성
+    if selected_persona_title not in st.session_state["chats"]:
+        st.session_state["chats"][selected_persona_title] = []
+    if selected_persona_title not in st.session_state["messages"]:
+        st.session_state["messages"][selected_persona_title] = []
 
     col1, col2 = st.columns(2)
     
@@ -208,9 +223,9 @@ def main():
 
             if user_question:
                 now = datetime.now().strftime("%H:%M")
-                st.session_state["chat"].append(("user", now, user_question))
+                st.session_state["chats"][selected_persona_title].append(("user", now, user_question))
                 if "[에러 발생]" not in user_question and "[STT 에러 발생]" not in user_question:
-                    st.session_state["messages"].append({"role": "user", "content": user_question})
+                    st.session_state["messages"][selected_persona_title].append({"role": "user", "content": user_question})
 
     with col2:
         st.subheader("상담사 답변")
@@ -218,18 +233,19 @@ def main():
         if user_question:
             if "[STT 에러 발생]" in user_question:
                 response = "사연을 제대로 듣지 못했어요. 다시 말씀해주시겠어요?"
-                st.session_state["chat"].append(("bot", datetime.now().strftime("%H:%M"), response))
+                st.session_state["chats"][selected_persona_title].append(("bot", datetime.now().strftime("%H:%M"), response))
             else:
                 with st.spinner(f"{selected_persona_title}가 답변을 고민 중입니다..."):
-                    response = ask_gemini(st.session_state["messages"], model, gemini_api_key, selected_system_prompt)
+                    response = ask_gemini(st.session_state["messages"][selected_persona_title], model, gemini_api_key, selected_system_prompt)
                 
                 if "[답변 에러 발생]" not in response:
-                    st.session_state["messages"].append({"role": "model", "content": response})
+                    st.session_state["messages"][selected_persona_title].append({"role": "model", "content": response})
                 
                 now = datetime.now().strftime("%H:%M")
-                st.session_state["chat"].append(("bot", now, response))
+                st.session_state["chats"][selected_persona_title].append(("bot", now, response))
 
-        for sender, time, message in st.session_state["chat"]:
+        # 현재 선택된 상담사의 대화 내역만 화면에 출력
+        for sender, time, message in st.session_state["chats"][selected_persona_title]:
             if sender == "user":
                 st.write(f'<div style="display:flex;align-items:center;"><div style="background-color:#FFD1DC;color:black;border-radius:12px;padding:8px 12px;margin-right:8px;">{message}</div><div style="font-size:0.8rem;color:gray;">{time}</div></div>', unsafe_allow_html=True)
             else:
